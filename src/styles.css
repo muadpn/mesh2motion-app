@@ -1,6 +1,4 @@
 /* styles.css - Updated to match NextJS/shadcn theme */
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
-
 :root {
   --background: 226 32% 8%;
   --foreground: 240 14% 89%;
@@ -25,7 +23,7 @@
 
 * {
   color: hsl(var(--foreground));
-  font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: "Bricolage Grotesque", -apple-system, BlinkMacSystemFont, sans-serif;
   font-size: 13px;
   display: inline-block;
   border-color: hsl(var(--border));

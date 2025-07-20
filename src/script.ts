@@ -65,6 +65,7 @@ export class Bootstrap {
     this.process_step = this.process_step_changed(ProcessStep.LoadModel)
     this.animate()
     this.inject_build_version()
+    this.setupPostMessageListener() // Add postMessage listener
   } // end initialize()
 
   constructor () {
@@ -79,6 +80,104 @@ export class Bootstrap {
     } else {
       console.warn('Build version DOM element is null. Cannot set number')
     }
+  }
+
+  private setupPostMessageListener(): void {
+    window.addEventListener('message', (event: MessageEvent) => {
+      // Handle LOAD_MODEL message from parent window
+      if (event.data?.type === 'LOAD_MODEL') {
+        const { url, fileExtension } = event.data.payload
+        
+        // Send loading status
+        this.sendModelLoadingStatus('loading', 'Received model load request...')
+        
+        // Reset the application state
+        this.resetApplicationState()
+        
+        // Load the model
+        this.loadModelFromUrl(url, fileExtension)
+      }
+    })
+  }
+
+  private sendModelLoadingStatus(
+    status: 'idle' | 'loading' | 'success' | 'error',
+    message: string,
+    modelInfo?: { vertexCount: number; triangleCount: number; objectsCount: number }
+  ): void {
+    window.parent.postMessage({
+      type: 'MODEL_LOADING_STATUS',
+      payload: {
+        status,
+        message,
+        modelInfo
+      }
+    }, '*')
+  }
+
+  private resetApplicationState(): void {
+    // Clear existing model from scene
+    if (this.load_model_step.model_meshes()) {
+      this.scene.remove(this.load_model_step.model_meshes())
+      Utility.remove_object_with_children(this.load_model_step.model_meshes())
+    }
+
+    // Clear skinned meshes if they exist
+    this.remove_skinned_meshes_from_scene()
+
+    // Clear skeleton helper
+    if (this.skeleton_helper) {
+      this.scene.remove(this.skeleton_helper)
+      this.skeleton_helper = undefined
+    }
+
+    // Clear debugging visuals
+    if (this.debugging_visual_object) {
+      Utility.remove_object_with_children(this.debugging_visual_object)
+      this.debugging_visual_object = Utility.regenerate_debugging_scene(this.scene)
+    }
+
+    // Reset transform controls
+    this.transform_controls.detach()
+
+    // Reset step-specific data
+    this.load_model_step.resetModelData()
+    this.edit_skeleton_step.set_currently_selected_bone(null)
+    this.weight_skin_step.reset_all_skin_process_data()
+
+    // Reset to LoadModel step
+    this.process_step = this.process_step_changed(ProcessStep.LoadModel)
+
+    // Hide info container
+    if (this.ui.dom_info_container !== null) {
+      this.ui.dom_info_container.style.display = 'none'
+    }
+  }
+
+  private loadModelFromUrl(url: string, fileExtension: string): void {
+    // Update status
+    this.sendModelLoadingStatus('loading', 'Loading model file...')
+
+    // Add load complete listener
+    this.load_model_step.addEventListener('modelLoaded', () => {
+      // Get model info
+      const modelInfo = {
+        vertexCount: this.load_model_step.vertex_count,
+        triangleCount: this.load_model_step.triangle_count,
+        objectsCount: this.load_model_step.objects_count
+      }
+
+      // Send success status
+      this.sendModelLoadingStatus('success', 'Model loaded successfully!', modelInfo)
+    }, { once: true }) // Use once to ensure it only fires for this load
+
+    // Add error handling
+    this.load_model_step.addEventListener('modelLoadError', (event: any) => {
+      this.sendModelLoadingStatus('error', `Failed to load model: ${event.detail.error}`)
+    }, { once: true })
+
+    // Load the model using existing method
+    this.load_model_step.loadModelFromUrl(url, fileExtension)
   }
 
   private setup_environment (): void {

@@ -10,7 +10,7 @@ import { MathUtils } from 'three/src/math/MathUtils.js'
 import { FrontSide } from 'three/src/constants.js'
 import { type BufferGeometry, type Material, type Object3D, type SkinnedMesh } from 'three'
 
-// Note: EventTarget is a built-ininterface and do not need to import it
+// Note: EventTarget is a built-interface and do not need to import it
 export class StepLoadModel extends EventTarget {
   private readonly gltf_loader = new GLTFLoader()
   private readonly fbx_loader = new FBXLoader()
@@ -135,22 +135,73 @@ export class StepLoadModel extends EventTarget {
     return file_extension
   }
 
+  // Public method to load model from URL (called from script.ts via postMessage)
+  public loadModelFromUrl(url: string, fileExtension: string): void {
+    this.load_model_file(url, fileExtension)
+  }
+
   private load_model_file (model_file_path: string, file_extension: string): void {
     if (file_extension === 'fbx') {
       console.log('Loading FBX model:', model_file_path)
-      this.fbx_loader.load(model_file_path, (fbx) => {
-        const loaded_scene: Scene = new Scene()
-        loaded_scene.add(fbx)
-        this.process_loaded_scene(loaded_scene)
-      })
+      this.fbx_loader.load(
+        model_file_path, 
+        (fbx) => {
+          const loaded_scene: Scene = new Scene()
+          loaded_scene.add(fbx)
+          this.process_loaded_scene(loaded_scene)
+        },
+        (progress) => {
+          // Progress callback
+          console.log('Loading progress:', (progress.loaded / progress.total * 100) + '%')
+        },
+        (error) => {
+          // Error callback
+          console.error('Error loading FBX:', error)
+          this.dispatchEvent(new CustomEvent('modelLoadError', { detail: { error: error.message || 'Failed to load FBX' } }))
+        }
+      )
     } else if (file_extension === 'gltf' || file_extension === 'glb') {
-      this.gltf_loader.load(model_file_path, (gltf) => {
-        const loaded_scene: Scene = gltf.scene
-        this.process_loaded_scene(loaded_scene)
-      })
+      this.gltf_loader.load(
+        model_file_path, 
+        (gltf) => {
+          const loaded_scene: Scene = gltf.scene
+          this.process_loaded_scene(loaded_scene)
+        },
+        (progress) => {
+          // Progress callback
+          console.log('Loading progress:', (progress.loaded / progress.total * 100) + '%')
+        },
+        (error) => {
+          // Error callback
+          console.error('Error loading GLTF/GLB:', error)
+          this.dispatchEvent(new CustomEvent('modelLoadError', { detail: { error: error.message || 'Failed to load GLB' } }))
+        }
+      )
     } else {
       console.error('Unsupported file format to load. Only acccepts FBX, GLTF, GLB:', model_file_path)
+      this.dispatchEvent(new CustomEvent('modelLoadError', { detail: { error: 'Unsupported file format' } }))
     }
+  }
+
+  // Method to reset all model data (called when loading new model via postMessage)
+  public resetModelData(): void {
+    // Clear geometry list
+    this.geometry_list.length = 0
+    
+    // Clear material list
+    this.material_list.length = 0
+    
+    // Reset counters
+    this.vertex_count = 0
+    this.triangle_count = 0
+    this.objects_count = 0
+    
+    // Clear scenes
+    this.original_model_data = new Scene()
+    this.final_mesh_data = new Scene()
+    
+    // Reset debug mode
+    this.debug_model_loading = false
   }
 
   private process_loaded_scene (loaded_scene: Scene): void {
